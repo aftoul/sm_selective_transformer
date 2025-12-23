@@ -1,0 +1,16 @@
+base: "../swin_b_teacher_base.yml"
+model:
+  embed_dim: 384
+  atten_dim: 384
+  depth: 12
+  num_heads: 6
+  num_groups: 12
+  mlp_dim: 1536
+  attention_scale: 8.0
+  drop_path: 0.05
+training:
+  mask_scale: 8.0
+  batch_size: 512
+  lr: 0.0005
+  hard_labels: true
+checkpoint: "checkpoints/distil/swin_b/small_short_ml_hard.pth"

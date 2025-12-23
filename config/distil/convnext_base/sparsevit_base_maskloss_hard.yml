@@ -1,0 +1,15 @@
+base: "../convnext_base_teacher_base.yml"
+model:
+  embed_dim: 768
+  atten_dim: 768
+  depth: 12
+  num_heads: 12
+  num_groups: 12
+  mlp_dim: 3072
+  attention_scale: 8.0
+  drop_path: 0.2
+training:
+  hard_labels: true
+  batch_size: 1024
+  lr: 0.001
+checkpoint: "checkpoints/distil/convnext_base/base_ml_hard.pth"

@@ -1,0 +1,15 @@
+base: "../base.yml"
+model:
+  embed_dim: 192
+  atten_dim: 192
+  depth: 24
+  num_heads: 3
+  num_groups: 12
+  mlp_dim: 768
+  attention_scale: 0.0
+  drop_path: 0.05
+training:
+  batch_size: 512
+  mask_scale: 4.0
+checkpoint: "checkpoints/scratch/small_tall.pth"
+

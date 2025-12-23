@@ -1,0 +1,6 @@
+base: "../base.yml"
+model:
+  use_distil_token: True
+teacher:
+  name: "regnet_y_16gf"
+

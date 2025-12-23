@@ -1,0 +1,18 @@
+base: "../efficientnet_v2_l_teacher_base.yml"
+model:
+  embed_dim: 192
+  atten_dim: 192
+  depth: 12
+  num_heads: 3
+  num_groups: 12
+  mlp_dim: 768
+  attention_scale: 8.0
+augmentation:
+  random_erasing: 0.05
+  color_jitter: false
+  three_aug: false
+checkpoint: "checkpoints/distil/efficientnet_v2_l/tiny_ml_hard.pth"
+training:
+  batch_size: 512
+  lr: 0.0005
+  hard_labels: true

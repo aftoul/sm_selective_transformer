@@ -1,0 +1,5 @@
+base: "./sparsevit_small.yml"
+training:
+  hard_labels: True
+checkpoint: "checkpoints/distil/regnet_y_16gf/small_hard.pth"
+

@@ -1,0 +1,33 @@
+model:
+  image_size: 224
+  patch_size: 16
+  num_classes: 1000
+  channels: 3
+  mask_threshold: 0.05
+  dropout: 0.0
+  drop_path: 0.0
+  patch_drop: 0.05
+training:
+  batch_size: 1024
+  epochs: 325
+  warmup_epochs: 15
+  cooldown_epochs: 25
+  wd: 0.05
+  max_grad_norm: 1.0
+  alpha: 0.5
+  t: 4.0
+  label_smoothing: 0.11
+  max_mask_weight: 0.25
+  mask_scale: 4.0
+  model_ema_steps: 32
+  model_ema_decay: 0.999
+augmentation:
+  resize: 232
+  crop: 224
+  random_resized_crop: True
+  hflip: 0.5
+  random_erasing: 0.1
+  color_jitter: False
+  three_aug: True
+  cutmix_mixup: True
+  rand_augment: True

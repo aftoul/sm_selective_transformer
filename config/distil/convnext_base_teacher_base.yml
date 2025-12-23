@@ -1,0 +1,5 @@
+base: "../base.yml"
+model:
+  use_distil_token: true
+teacher:
+  name: "convnext_base"

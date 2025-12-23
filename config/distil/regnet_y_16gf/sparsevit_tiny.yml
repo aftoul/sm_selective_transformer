@@ -1,0 +1,11 @@
+base: "../regnet_y_16gf_teacher_base.yml"
+model:
+  embed_dim: 192
+  atten_dim: 192
+  depth: 12
+  num_heads: 3
+  num_groups: 12
+  mlp_dim: 768
+  attention_scale: 0.0
+checkpoint: "checkpoints/distil/regnet_y_16gf/tiny.pth"
+

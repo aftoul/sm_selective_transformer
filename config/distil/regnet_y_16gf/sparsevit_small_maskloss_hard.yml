@@ -1,0 +1,5 @@
+base: "./sparsevit_small_maskloss.yml"
+training:
+  hard_labels: True
+checkpoint: "checkpoints/distil/regnet_y_16gf/small_ml_hard.pth"
+

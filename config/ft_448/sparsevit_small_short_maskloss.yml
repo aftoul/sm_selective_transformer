@@ -1,0 +1,23 @@
+base: "../base.yml"
+model:
+  image_size: 448
+  embed_dim: 384
+  atten_dim: 384
+  depth: 12
+  num_heads: 6
+  num_groups: 12
+  mlp_dim: 1536
+  attention_scale: 8.0
+  drop_path: 0.05
+  use_distil_token: False
+training:
+  batch_size: 1024
+  epochs: 100
+  warmup_epochs: 5
+  cooldown_epochs: 10
+  lr: 0.0005
+augmentation:
+  resize: 464
+  crop: 448
+checkpoint: "checkpoints/ft_448/small_ml_448.pth"
+
