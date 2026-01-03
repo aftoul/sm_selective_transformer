@@ -4,48 +4,6 @@ import torch.nn.functional as F
 from torchvision.ops import StochasticDepth
 import math
 
-class GroupedLinear(nn.Module):
-    def __init__(self, in_features, out_features, groups=1, bias=True, reverse_groups=False, device=None, dtype=None):
-        factory_kwargs = {"device": device, "dtype": dtype}
-        super().__init__()
-        self.reverse_groups = reverse_groups
-        self.in_features = in_features
-        self.out_features = out_features
-        self.groups = groups
-        assert in_features % groups == 0, (f"Input features ({in_features}) "
-                                           f"must be divisible by number of groups ({groups})")
-        assert out_features % groups == 0, (f"Output features ({out_features}) "
-                                            f"must be divisible by number of groups ({groups})")
-        if self.reverse_groups:
-            self.reversed_groups = groups
-            self.groups = min(in_features, out_features)//groups
-        else:
-            self.reversed_groups = None
-            self.groups = groups
-        self.weight = nn.Parameter(
-            torch.empty((self.groups, out_features//self.groups, in_features//self.groups), **factory_kwargs)
-        )
-        if bias:
-            self.bias = nn.Parameter(torch.empty(out_features, **factory_kwargs))
-        else:
-            self.register_parameter("bias", None)
-        self.reset_parameters()
-
-    def reset_parameters(self) -> None:
-        nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        if self.bias is not None:
-            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
-            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-            nn.init.uniform_(self.bias, -bound, bound)
-
-    def forward(self, x):
-        if self.reversed_groups is not None:
-            x = x.unflatten(-1, (self.reversed_groups, -1))
-            x = x.transpose(-1, -2).flatten(-2, -1)
-        x = x.unflatten(-1, (self.groups, -1))
-        x = torch.einsum('...gi,goi->...go', x, self.weight)
-        return x.flatten(-2, -1)
-
 class SoftMaskedMultiheadAttention(nn.Module):
     def __init__(self, embed_dim, num_heads, dropout=0.0, bias=True,
                  add_bias_kv=True, kdim=None, vdim=None,
@@ -152,16 +110,10 @@ class SoftMaskedMultiheadAttention(nn.Module):
 
         return attn_output, attn_weights
 
-def get_ffn(input_dim, output_dim, middle_dim, groups=None, dropout=0.1):
-    assert groups is None or isinstance(groups, int), 'FFN groups must be an integer or None'
-    if groups is None or groups == 1:
-        fc1 = nn.Linear(input_dim, middle_dim)
-        fc2 = nn.Linear(middle_dim, output_dim)
-        fc3 = nn.Identity()
-    else:
-        fc1 = GroupedLinear(input_dim, middle_dim, groups=groups)
-        fc2 = GroupedLinear(middle_dim, output_dim, groups=groups, reverse_groups=True)
-        fc3 = nn.Linear(output_dim, output_dim)
+def get_ffn(input_dim, output_dim, middle_dim, dropout=0.1):
+    fc1 = nn.Linear(input_dim, middle_dim)
+    fc2 = nn.Linear(middle_dim, output_dim)
+    fc3 = nn.Identity()
     return nn.Sequential(
             fc1,
             nn.GELU(),
@@ -172,7 +124,7 @@ def get_ffn(input_dim, output_dim, middle_dim, groups=None, dropout=0.1):
             )
 # Assuming SoftMaskedMultiheadAttention is already defined as provided earlier
 class EncoderBlock(nn.Module):
-    def __init__(self, input_dim, num_groups, embed_dim, num_heads, mlp_dim, dropout=0.1, drop_path=0.0, patch_drop=0.0, attention_scale=2., mask_threshold=0.05, ffn_groups=None):
+    def __init__(self, input_dim, embed_dim, num_heads, mlp_dim, dropout=0.1, drop_path=0.0, patch_drop=0.0, attention_scale=2., mask_threshold=0.05):
         super().__init__()
         self.mask_threshold = mask_threshold
         self.self_attn = SoftMaskedMultiheadAttention(
@@ -184,21 +136,14 @@ class EncoderBlock(nn.Module):
         else:
             self.linear_mask = None
         if input_dim != embed_dim:
-            self.embed = nn.Sequential(
-                    GroupedLinear(input_dim, embed_dim, num_groups),
-                    nn.GELU()
-                    )
-            self.project = nn.Sequential(
-                    GroupedLinear(embed_dim, input_dim, num_groups),
-                    nn.GELU()
-                    )
+            raise ValueError("embed_dim must equal atten_dim but {input_dim}!={embed_dim}")
         else:
             self.embed = nn.Identity()
             self.project = nn.Identity()
         self.norm1 = nn.LayerNorm(embed_dim)
         self.norm2 = nn.LayerNorm(embed_dim)
         # Feed-forward network (MLP)
-        self.mlp = get_ffn(embed_dim, embed_dim, mlp_dim, groups=ffn_groups, dropout=dropout)
+        self.mlp = get_ffn(embed_dim, embed_dim, mlp_dim, dropout=dropout)
         self.path_drop = StochasticDepth(drop_path, mode='row')
         self.norm3 = nn.LayerNorm(input_dim)
 
@@ -308,7 +253,6 @@ class VisionTransformer(nn.Module):
         atten_dim=192,
         depth=12,
         num_heads=3,
-        num_groups=6,
         mlp_dim=768,
         channels=3,
         dropout=0.1,
@@ -316,7 +260,6 @@ class VisionTransformer(nn.Module):
         patch_drop=0.1,
         attention_scale=2.,
         mask_threshold=0.05,
-        ffn_groups=None,
         use_distil_token=False
     ):
         super().__init__()
@@ -342,13 +285,12 @@ class VisionTransformer(nn.Module):
         # Encoder blocks
         self.encoder_layers = nn.ModuleList([
             EncoderBlock(
-                embed_dim, num_groups, atten_dim,
+                embed_dim, atten_dim,
                 num_heads, mlp_dim,
                 dropout, drop_path * i / (depth - 1),
                 patch_drop=patch_drop,
                 attention_scale=attention_scale,
                 mask_threshold=mask_threshold,
-                ffn_groups=ffn_groups
                 )
             for i in range(depth)
         ])
@@ -382,50 +324,89 @@ class VisionTransformer(nn.Module):
         if self.dis_token is not None:
             nn.init.trunc_normal_(self.dis_token, std=0.02)
 
-    def forward(self, x, full=True):
+    def forward_features(
+        self,
+        pixel_values,
+        full=True,
+        output_hidden_states=False,
+    ):
         """
-        x: shape (batch_size, channels, height, width)
+        Args:
+            pixel_values: (B, C, H, W)
+        Returns:
+            last_hidden_state: (B, N, D)
+            all_hidden_states: tuple or None
+            masks: Tensor or None
         """
-        batch_size = x.size(0)
+        batch_size = pixel_values.size(0)
+        hidden_states = []
 
         # Patch embedding
-        x = self.patch_embed(x)  # Shape: (batch_size, embed_dim, num_patches_height, num_patches_width)
-        x = x.flatten(2)  # Shape: (batch_size, embed_dim, num_patches)
-        x = x.transpose(1, 2)  # Shape: (batch_size, num_patches, embed_dim)
+        x = self.patch_embed(pixel_values)
+        x = x.flatten(2).transpose(1, 2)
 
+        # Distillation token
         if self.dis_token is not None:
             dis_tokens = self.dis_token.expand(batch_size, -1, -1)
             x = torch.cat((dis_tokens, x), dim=1)
-        # Add class token
-        cls_tokens = self.cls_token.expand(batch_size, -1, -1)  # Shape: (batch_size, 1, embed_dim)
-        x = torch.cat((cls_tokens, x), dim=1)  # Shape: (batch_size, num_patches + 1, embed_dim)
 
-        # Add positional encoding
+        # CLS token
+        cls_tokens = self.cls_token.expand(batch_size, -1, -1)
+        x = torch.cat((cls_tokens, x), dim=1)
+
+        # Position + dropout
         x = x + self.pos_embed
         x = self.dropout(x)
 
-        # Apply encoder blocks
         masks = []
-        for encoder_layer in self.encoder_layers:
-            x, mask = encoder_layer(x, full)
+
+        for layer in self.encoder_layers:
+            x, mask = layer(x, full)
+
+            if output_hidden_states:
+                hidden_states.append(x)
+
             if mask is not None:
                 masks.append(mask)
 
-        # Classification head
         x = self.post_norm(x)
-        cls_token_final = x[:, 0]  # Extract the [CLS] token
-        logits = self.head(cls_token_final)
 
-        # If using token distil, do logits
+        if output_hidden_states:
+            hidden_states = tuple(hidden_states)
+        else:
+            hidden_states = None
+
+        if len(masks) > 0:
+            masks = tuple(masks)
+        else:
+            masks = None
+
+        return x, hidden_states, masks
+
+
+    def forward_classifier(self, hidden_states):
+        """
+        Args:
+            hidden_states: (B, N, D)
+        Returns:
+            logits: (B, num_classes)
+            dis_logits: (B, num_classes) or None
+        """
+        cls_token = hidden_states[:, 0]
+        logits = self.head(cls_token)
+
+        dis_logits = None
         if self.dis_token is not None:
-            cls_token_final = x[:, 1]  # Extract the [CLS] token
-            dis_logits = self.dis_head(cls_token_final)
+            dis_cls_token = hidden_states[:, 1]
+            dis_logits = self.dis_head(dis_cls_token)
+
+            # Inference-time averaging (same as original)
             if not self.training:
                 logits = (logits + dis_logits) / 2
-        else:
-            dis_logits = None
-        if len(masks) > 0:
-            mask_mean = torch.stack(masks, dim=0)
-        else:
-            mask_mean = None
-        return logits, dis_logits, mask_mean
+
+        return logits, dis_logits
+
+    def forward(self, x, full=True):
+        last_hidden_states, hidden_states, masks = self.forward_features(x, full)
+        logits, dis_logits = self.forward_classifier(last_hidden_states)
+        return logits, dis_logits, masks

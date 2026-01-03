@@ -4,7 +4,6 @@ model:
   atten_dim: 768
   depth: 12
   num_heads: 12
-  num_groups: 12
   mlp_dim: 3072
   attention_scale: 0.0
   drop_path: 0.2

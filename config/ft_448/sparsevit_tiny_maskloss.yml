@@ -5,7 +5,6 @@ model:
   atten_dim: 192
   depth: 12
   num_heads: 3
-  num_groups: 12
   mlp_dim: 768
   attention_scale: 8.0
   use_distil_token: False
