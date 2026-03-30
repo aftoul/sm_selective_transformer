@@ -1,0 +1,14 @@
+--find-links https://storage.googleapis.com/libtpu-releases/index.html
+--find-links https://storage.googleapis.com/libtpu-wheels/index.html
+
+numpy
+tqdm
+timm
+mkl
+mkl-include
+tf-nightly
+tb-nightly
+tbp-nightly
+torch==2.4.0
+torchvision==0.19.0
+torch_xla[tpu]==2.4.0
